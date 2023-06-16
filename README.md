@@ -1,6 +1,8 @@
 # ChildhoodCancerDataInitiative-Submission_ValidatoRy
 This script will take a CCDI metadata manifest file and validates the submission based on the model found in the template file. This is based on the CCDI-Submission_ValidatoR.R script.
 
+This is a refactoring of the [CCDI-Submission_ValidatoR]([https://github.com/CBIIT/ChildhoodCancerDataInitiative-CatchERR](https://github.com/CBIIT/ChildhoodCancerDataInitiative-Submission_ValidatoR/tree/main)) code into python.
+
 This python script takes a data file that is formatted to the [submission template for CCDI](https://github.com/CBIIT/ccdi-model/tree/main/metadata-manifest) as input. It will output a file that describes whether sections of the Metadata table PASS, ERROR or WARNING on the checks.
 
 To run the script on a CCDI template, run the following command in a terminal where python3 is installed for help.
