@@ -30,7 +30,7 @@ parser = argparse.ArgumentParser(
 
 parser.add_argument( '-f', '--filename', help='dataset file (.xlsx, .tsv, .csv)', required=True)
 parser.add_argument( '-t', '--template', help="dataset template file, CCDI_submission_metadata_template.xlsx", required=True)
-parser.add_argument( '-p', '--s3_profile', help="The s3 bucket profile associated with the access to the s3 bucket.",default='default')
+parser.add_argument( '-p', '--s3_profile', help="The s3 bucket profile associated with the access to the s3 bucket ('default' is default).",default='default')
 
 
 
@@ -73,6 +73,22 @@ todays_date=refresh_date()
 output_file=(file_name+
             "_Validate"+
             todays_date)
+
+#function to determine if a string value is a float
+def isFloat(s):
+    try:
+        float(s)
+        return True
+    except ValueError:
+        return False
+    
+#function to determine if a string value is an int
+def isInt(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False    
 
 
 ##############
@@ -158,7 +174,7 @@ if len(removed_nodes)>0:
     for removed_node in removed_nodes:
         print (f"\t{removed_node}")
         del meta_dfs[removed_node]
-               
+
 
 ##############
 #
@@ -187,7 +203,7 @@ dict_nodes=sorted(dict_nodes, key=lambda x: dictionary_node_check.index(x) if x 
 ##############
 
 with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
-        
+
 
 ##############
 #
@@ -353,7 +369,6 @@ with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
 
                             print('\n', file=outf)  
 
-                      
                     #if the property is not an enum
                     else:
                         unique_values=df[property].dropna().unique()
@@ -386,11 +401,102 @@ with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
 
                                 #itterate over that list and print out the values
                                 for i, enum in enumerate(bad_enum_list):
-                                    if i % 5 == 0:
+                                    if i % line_length == 0:
                                         print("\n\t\t",end='', file=outf)
                                     print(enum, end=', ', file=outf)   
 
                                 print('\n', file=outf)  
+
+
+##############
+#
+# Integer and numeric checks
+#
+##############
+
+    print("\nThis section will display any values in properties that are expected to be either numeric or integer based on the Dictionary, but have values that are not:\n----------\n",file=outf)
+
+    #Since the files are read in as "all strings" to ensure that the file can be ingested, this can hide issues with integers and numbers.
+    #This check will look at the dictionary to determine which properties should be integers and numbers and then force the strings into those types and make checks.
+
+    int_props=dict_df[dict_df['Type']=='integer']['Property'].unique().tolist()
+    num_props=dict_df[dict_df['Type']=='number']['Property'].unique().tolist()
+    #for each tab
+    for node in dict_nodes:
+        
+        print(f'\n\t{node}\n\t----------', file=outf)
+        df=meta_dfs[node]
+        properties=df.columns
+        line_length=25
+
+        #for each property
+        for property in properties:
+            WARN_FLAG=False
+
+
+#NUMBER PROPS CHECK
+
+            #if that property is a number property
+            if property in num_props:
+                #if there are atleast one value
+                if len(df[property].dropna().tolist()) > 0:
+                    error_rows=[]
+                    #go through each row
+                    for row in list(range(len(df))):
+                        #obtain the value
+                        value=df[property][row]
+                        #if it is not NA
+                        if pd.notna(value):
+                            #test whether it is a float
+                            if not isFloat(value):
+                                #if not, add to list, row number offset by 2
+                                error_rows.append(row+2)
+                                WARN_FLAG=True
+
+                #if the warning flag was tripped
+                if WARN_FLAG:
+                    WARN_FLAG=False
+                    
+                    print(f'\tERROR: {property} property contains a value that is not a number:', file=outf)
+                    #itterate over that list and print out the values
+                    for i, row in enumerate(error_rows):
+                        if i % line_length == 0:
+                            print("\n\t\t",end='', file=outf)
+                        print(row, end=', ', file=outf)
+                    
+                    print('\n', file=outf) 
+
+#INTEGER PROPS CHECK
+
+            #if that property is a integer property
+            if property in int_props:
+                #if there are atleast one value
+                if len(df[property].dropna().tolist()) > 0:
+                    error_rows=[]
+                    #go through each row
+                    for row in list(range(len(df))):
+                        #obtain the value
+                        value=df[property][row]
+                        #if it is not NA
+                        if pd.notna(value):
+                            #test whether it is a int
+                            if not isInt(value):
+                                #if not, add to list, row number offset by 2
+                                error_rows.append(row+2)
+                                WARN_FLAG=True
+
+                #if the warning flag was tripped
+                if WARN_FLAG:
+                    WARN_FLAG=False
+                    
+                    print(f'\tERROR: {property} property contains a value that is not a number:', file=outf)
+                    #itterate over that list and print out the values
+                    for i, row in enumerate(error_rows):
+                        if i % line_length == 0:
+                            print("\n\t\t",end='', file=outf)
+                        print(row, end=', ', file=outf)
+                    
+                    print('\n', file=outf)
 
 
 ##############
@@ -402,14 +508,14 @@ with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
     print("\nThis section will display any values in properties that can accept strings, which are thought to contain PII/PHI based on regex suggestions from dbGaP:\n----------\n",file=outf)
 
     date_regex=['(0?[1-9]|1[0-2])[-\\/.](0?[1-9]|[12][0-9]|3[01])[-\\/.](19[0-9]{2}|2[0-9]{3}|[0-9]{2})',
-             '(19[0-9]{2}|2[0-9]{3})[-\\/.](0?[1-9]|1[0-2])[-\\/.](0?[1-9]|[12][0-9]|3[01])',
-             '(0?[1-9]|[12][0-9]|3[01])[\\/](19[0-9]{2}|2[0-9]{3})',
-             '(0?[1-9]|[12][0-9])[\\/]([0-9]{2})',
-             '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[0-9]{2}',
-             '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])19[0-9]{2}',
-             '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])2[0-9]{3}',
-             '19[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])',
-             '2[0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])']
+            '(19[0-9]{2}|2[0-9]{3})[-\\/.](0?[1-9]|1[0-2])[-\\/.](0?[1-9]|[12][0-9]|3[01])',
+            '(0?[1-9]|[12][0-9]|3[01])[\\/](19[0-9]{2}|2[0-9]{3})',
+            '(0?[1-9]|[12][0-9])[\\/]([0-9]{2})',
+            '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])[0-9]{2}',
+            '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])19[0-9]{2}',
+            '(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])2[0-9]{3}',
+            '19[0-9]{2}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])',
+            '2[0-9]{3}(0[1-9]|1[0-2])(0[1-9]|[12][0-9]|3[01])']
     
     #Problematic regex
     #A month name or abbreviation and a 1, 2, or 4-digit number, in either order, separated by some non-letter, non-number characters or not separated, e.g., "JAN '93", "FEB64", "May 3rd" (but not "May be 14").
@@ -578,25 +684,32 @@ with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
                     #for each unique file, based on the file_url, check samples
                     ##########################################
                     for unique_file in unique_files:
+
+                        # Define a regular expression pattern to match column names for [node].[node]_id columns
+                        pattern = r'.*\..*_id$'
+                        # Use the filter method to select columns matching the pattern
+                        selected_columns = df.filter(regex=pattern).columns.tolist()
                         #find the samples associated with the file
-                        file_samples=file_type_df[file_type_df['file_url_in_cds']==unique_file]['sample.sample_id'].unique().tolist()
+                        file_samples=file_type_df[file_type_df['file_url_in_cds']==unique_file][selected_columns].stack().unique().tolist()
 
-                        #if there are arrays of linking samples, break them appart
-                        for file_sample in file_samples:
-                            if ";" in file_sample:
-                                split_samples=file_sample.split(';')
-                                file_samples.remove(file_sample)
-                                for split_sample in split_samples:
-                                    file_samples.append(split_sample)
+                        #if these files are attached to samples
+                        if len(file_samples)>0:
+                            #if there are arrays of linking samples, break them appart
+                            for file_sample in file_samples:
+                                if ";" in file_sample:
+                                    split_samples=file_sample.split(';')
+                                    file_samples.remove(file_sample)
+                                    for split_sample in split_samples:
+                                        file_samples.append(split_sample)
 
-                        #if there are more than one sample associated with the file
-                        if len(file_samples)>1:
+                            #if there are more than one sample associated with the file
+                            if len(file_samples)>1:
 
-                            if WARN_FLAG:
-                                WARN_FLAG=False
-                                print(f'\t\tWARNING: A single sample file has multiple samples associated with it. These could cause errors in SRA submissions if this is unexpected:', file=outf)
+                                if WARN_FLAG:
+                                    WARN_FLAG=False
+                                    print(f'\t\tWARNING: A single sample file has multiple samples associated with it. These could cause errors in SRA submissions if this is unexpected:', file=outf)
 
-                            print(f'\t\t\tunique file url: {unique_file} \n\t\t\t\tsample_id: {file_samples}', file=outf)
+                                print(f'\t\t\tunique file url: {unique_file} \n\t\t\t\tsample_id: {file_samples}', file=outf)
                                 
                     
 
@@ -756,7 +869,7 @@ with open(f'{file_dir_path}/{output_file}.txt', 'w') as outf:
                 print(f'\t\tWARNING: There are files that are associated with more than one url:', file=outf)
 
             current_node=df_file[df_file['file_name']==file_name]['node'].values[0]
-            print(f'\t\t\t{current_node} : {file_name} --> {file_url}', file=outf)        
+            print(f'\t\t\t{current_node} : {file_name} --> {file_url}', file=outf)
 
 
 
