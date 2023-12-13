@@ -190,11 +190,9 @@ for node in dict_nodes:
     #if there is no data, drop the node/tab
     if test_df.empty:
         del meta_dfs[node]
-        dict_nodes.remove(node)
 
-#Final reordering of present nodes to show up in tab order in the output.
-dict_nodes=sorted(dict_nodes, key=lambda x: dictionary_node_check.index(x) if x in dictionary_node_check else float('inf'))
-
+#determine nodes again
+dict_nodes=set(list(meta_dfs.keys()))
 
 ##############
 #
